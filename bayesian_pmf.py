@@ -4,14 +4,19 @@ import pandas as pd
 from hyperparam_sampler import *
 from feature_sampler import *
 
+def init_UV_rand(N: int, M: int, D: int):
+    U = np.zeros((D, N), dtype=np.float32)
+    V = np.zeros((D, M), dtype=np.float32)
+
+    U = np.random.normal(0, 0.1, size=(D, N))
+    V = np.random.normal(0, 0.1, size=(D, M))
+    return U, V
 
 # TODO
 # We initialized the Gibbs sampler by setting the model parameters U and V to their
 # MAP estimates obtained by training a linear PMF model.
-def init_UV(N: int, M: int, D: int):
-    U = np.zeros((D, N), dtype=np.float32)
-    V = np.zeros((D, M), dtype=np.float32)
-    return U, V
+def init_UV_MAP(N: int, M: int, D: int):
+    pass
 
 
 def compute_RMSE(test_rating: np.ndarray, pred_rating: np.ndarray):
@@ -63,7 +68,7 @@ def bayesian_PMF(
     alpha: Gaussian precision
     """
     (N, M) = R.shape
-    _U, _V = init_UV(N, M, D)
+    _U, _V = init_UV_rand(N, M, D)
     W0_inv = np.linalg.inv(W0)
 
     # extract test-information
@@ -120,4 +125,4 @@ def bayesian_PMF(
         rmses[t] = compute_RMSE(test, pred)
         print(f"\trmse={rmses[t]}")
 
-    return
+    return pred, rmses[-1]

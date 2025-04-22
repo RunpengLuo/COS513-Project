@@ -8,7 +8,7 @@ import pandas as pd
 from preprocessing import leave_k_out
 from bayesian_pmf import bayesian_PMF
 from bayesian_pmf_VI import bayesian_PMF_VI
-from evaluation import plot_rmse
+from evaluation import plot_rmse, compare_rmse
 
 if __name__ == "__main__":
     _, data_file, outdir = sys.argv
@@ -61,26 +61,26 @@ if __name__ == "__main__":
     alpha = 2
     beta0 = 2
 
-    # pred, rmses = bayesian_PMF(
-    #     train_df,
-    #     mat_train,
-    #     mask_train,
-    #     valid,
-    #     valid_uidx,
-    #     valid_bidx,
-    #     D,
-    #     T,
-    #     G,
-    #     mu0,
-    #     nu0,
-    #     W0,
-    #     beta0,
-    #     alpha,
-    #     rate_min=0,
-    #     rate_max=1,
-    #     seed=42,
-    #     v=1,
-    # )
+    pred, rmses = bayesian_PMF(
+        train_df,
+        mat_train,
+        mask_train,
+        valid,
+        valid_uidx,
+        valid_bidx,
+        D,
+        T,
+        G,
+        mu0,
+        nu0,
+        W0,
+        beta0,
+        alpha,
+        rate_min=0,
+        rate_max=1,
+        seed=42,
+        v=1,
+    )
 
     pred_ratings, rmses = bayesian_PMF_VI(
         train_df,
@@ -101,3 +101,36 @@ if __name__ == "__main__":
 
     out_rmse = os.path.join(outdir, "rmse.png")
     plot_rmse(rmses, out_rmse)
+
+    ### comparing MAP vs ALS
+    init_methods = ["MAP", "ALS"]
+    results = {}
+
+    for method in init_methods:
+        print(f"\n=== Running Bayesian PMF with {method} initialization ===\n")
+        pred, rmses = bayesian_PMF(
+            train_df,
+            mat_train,
+            mask_train,
+            valid,
+            valid_uidx,
+            valid_bidx,
+            D,
+            T,
+            G,
+            mu0,
+            nu0,
+            W0,
+            beta0,
+            alpha,
+            rate_min=0,
+            rate_max=1,
+            seed=42,
+            v=1,
+            init_method=method,
+        )
+        results[method] = rmses
+
+    compare_plot_path = os.path.join(outdir, "rmse_comparison.png")
+    compare_rmse(results, compare_plot_path)
+

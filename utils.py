@@ -1,6 +1,7 @@
 import json
 import pandas as pd
 
+
 def json_to_df(filepath: str):
     """
     convert json to pandas dataframe

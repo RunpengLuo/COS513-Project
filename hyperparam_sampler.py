@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.stats import wishart, multivariate_normal
+from scipy.stats import wishart
 
 
 def update_beta0(beta0, n):
@@ -11,7 +11,7 @@ def update_nu0(nu0, n):
 
 
 def get_mat_(mat: np.ndarray):
-    return np.mean(mat, axis=0)
+    return np.mean(mat, axis=1)
 
 
 def get_S_(mat: np.ndarray):
@@ -36,12 +36,12 @@ def update_W0(W0_inv: np.ndarray, mat: np.ndarray, mu0, beta0):
     S_ = get_S_(mat)
     mu0_mat_ = mu0 - get_mat_(mat)
     mutc = (beta0 * n) / (beta0 + n)
-    _W0_inv = W0_inv + n * S_ + mutc * mu0_mat_ @ mu0_mat_.T
+    _W0_inv = W0_inv + n * S_ + mutc * (mu0_mat_ @ mu0_mat_.T)
     return np.linalg.inv(_W0_inv)
 
 
 def sample_Normal_Wishart(nu0, mu0, W0, beta0, seed=None):
-    Lambda = wishart.rvs(df=nu0, scale=W0, seed=seed)
+    Lambda = wishart.rvs(df=nu0, scale=W0, random_state=seed)
     cov_mat = np.linalg.inv(beta0 * Lambda)
-    mu = multivariate_normal(mean=mu0, cov=cov_mat)
+    mu = np.random.multivariate_normal(mean=mu0, cov=cov_mat)
     return mu, cov_mat, Lambda

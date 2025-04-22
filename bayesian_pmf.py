@@ -1,22 +1,95 @@
+import sys
 import numpy as np
 import pandas as pd
 
 from hyperparam_sampler import *
 from feature_sampler import *
 
-def init_UV_rand(N: int, M: int, D: int):
-    U = np.zeros((D, N), dtype=np.float32)
-    V = np.zeros((D, M), dtype=np.float32)
+import time
 
-    U = np.random.normal(0, 0.1, size=(D, N))
-    V = np.random.normal(0, 0.1, size=(D, M))
+
+def init_UV_rand(N: int, M: int, D: int):
+    U = 0.01 * np.random.randn(D, N)
+    V = 0.01 * np.random.randn(D, M)
     return U, V
 
+
 # TODO
-# We initialized the Gibbs sampler by setting the model parameters U and V to their
-# MAP estimates obtained by training a linear PMF model.
-def init_UV_MAP(N: int, M: int, D: int):
-    pass
+def init_UV_MAP(
+    train_df: pd.DataFrame,
+    R: np.ndarray,
+    Mask: np.ndarray,
+    mean_rating: float,
+    D: int,
+    epsilon: float,
+    lambda_u: float,
+    lambda_v: float,
+    momentum: float,
+    num_epoch: int,
+):
+    """
+    find MAP estimate via SGD
+    """
+    print(f"init solution with MAP")
+    (N, M) = R.shape
+    U, V = init_UV_rand(N, M, D)
+    U_inc = np.zeros_like(U)
+    V_inc = np.zeros_like(V)
+
+    idx = train_df[["uidx", "bidx"]].to_numpy()
+    rating = (train_df["rating"] - mean_rating).to_numpy()
+
+    _R = R - mean_rating
+    for epoch in range(num_epoch):
+        # compute loss
+        pred = np.array([np.dot(U[:, i], V[:, j]) for [i, j] in idx])
+        term1 = ((pred - rating) ** 2).sum()
+        term2 = (U**2).sum()
+        term3 = (V**2).sum()
+        loss = 0.5 * term1 + 0.5 * lambda_u * term2 + 0.5 * lambda_v * term3
+
+        print(loss, pred.shape)
+        # compute gredient
+        gd1 = pred - rating
+        # gd1 = np.tile(gd1, )
+        sys.exit(0)
+
+        pass
+
+    return
+
+
+def init_UV_ALS(
+    train_df: pd.DataFrame,
+    R: np.ndarray,
+    Mask: np.ndarray,
+    mean_rating: float,
+    D: int,
+    epsilon: float,
+    num_epoch: int,
+):
+    print(f"init solution with ALS")
+    (N, M) = R.shape
+    U, V = init_UV_rand(N, M, D)
+    idx = train_df[["uidx", "bidx"]].to_numpy()
+    rating = (train_df["rating"] - mean_rating).to_numpy()
+    for epoch in range(num_epoch):
+        pred = np.array([np.dot(U[:, i], V[:, j]) for [i, j] in idx])
+        rmse = compute_RMSE(rating, pred)
+        print(f"\tepoch={epoch}\trmse (train)={rmse}")
+        if rmse <= epsilon:
+            break
+        for ui in range(N):
+            rows = train_df.loc[train_df["uidx"] == ui, :]
+            A = V[:, rows["bidx"].to_numpy()]
+            b = (rows["rating"] - mean_rating).to_numpy()
+            U[:, ui], _, _, _ = np.linalg.lstsq(A.T, b, rcond=None)
+        for vi in range(M):
+            rows = train_df.loc[train_df["bidx"] == vi, :]
+            A = U[:, rows["uidx"].to_numpy()]
+            b = (rows["rating"] - mean_rating).to_numpy()
+            V[:, vi], _, _, _ = np.linalg.lstsq(A.T, b, rcond=None)
+    return U, V
 
 
 def compute_RMSE(test_rating: np.ndarray, pred_rating: np.ndarray):
@@ -30,17 +103,21 @@ def predict(
     item_ids: np.ndarray,
     mean_rating: np.float32,
 ):
-    (n, _) = user_ids.shape
-    ret = np.zeros((n, 1), dtype=np.float32)
+    n = user_ids.shape[0]
+    ret = np.zeros(n, dtype=np.float32)
     for i in range(n):
-        ret[i] = np.dot(U[:, user_ids[i]], V[:, item_ids[i]]) + mean_rating
+        ret[i] = np.dot(U[:, user_ids[i]], V[:, item_ids[i]])
+    ret += mean_rating
     return ret
 
 
 def bayesian_PMF(
+    train_df: pd.DataFrame,
     R: np.ndarray,
-    M: np.ndarray,
-    R_test: pd.DataFrame,
+    Mask: np.ndarray,
+    validate: np.ndarray,
+    user_ids: np.ndarray,
+    item_ids: np.ndarray,
     D: int,
     T: int,
     G: int,
@@ -56,7 +133,7 @@ def bayesian_PMF(
 ):
     """
     R: rating matrix with dimension N*M
-    M: boolean mask matrix with dimension N*M
+    Mask: boolean mask matrix with dimension N*M
     D: latent matrix dimension
     T: #total iterations
     G: #iterations for gibbs sampling
@@ -68,26 +145,25 @@ def bayesian_PMF(
     alpha: Gaussian precision
     """
     (N, M) = R.shape
-    _U, _V = init_UV_rand(N, M, D)
     W0_inv = np.linalg.inv(W0)
 
-    # extract test-information
-    user_ids = R_test["user_id"].to_numpy()
-    item_ids = R_test["item_id"].to_numpy()
-    test = R_test["rate"].to_numpy()
-
     # mean rating subtraction, address global biases
-    mean_rating = R[M].mean()
+    mean_rating = R[Mask].mean()
     print(f"Mean rating: {mean_rating}")
     R = R - mean_rating
 
-    rmses = np.zeros((T + 1, 1), dtype=np.float32)
+    # _U, _V = init_UV_sgd(train_df, R, Mask, mean_rating, D, 50, 0.01, 0.01, 0.8, 50)
+    # _U, _V = init_UV_rand(N, M, D)
+    _U, _V = init_UV_ALS(train_df, R, Mask, mean_rating, D, 0.05, 10)
+
+    rmses = np.zeros(T + 1, dtype=np.float128)
     # prediction
     pred = predict(_U, _V, user_ids, item_ids, mean_rating)
     pred = np.clip(pred, a_min=rate_min, a_max=rate_max)
-    rmses[0] = compute_RMSE(test, pred)
-    print(f"rmse={rmses[0]} pre-loop")
+    rmses[0] = compute_RMSE(validate, pred)
+    print(f"rmse(validate)={rmses[0]} pre-loop")
 
+    ts = time.perf_counter()
     for t in range(1, T + 1):
         ## sample from Gaussian-Wishart priors
         W0u = update_W0(W0_inv, _U, mu0, beta0)
@@ -108,21 +184,24 @@ def bayesian_PMF(
             print(f"t={t}\tgibbs-sampling iteration {g}")
             ## sample user latent D-vector
             for i in range(N):
-                mu_i, Lambda_i_inv = update_mu_ui(R, M, _V, Lambda_u, mu_u, alpha, i)
+                mu_i, Lambda_i_inv = update_mu_ui(R, Mask, _V, Lambda_u, mu_u, alpha, i)
                 _U[:, i] = sample_ui(mu_i, Lambda_i_inv)
 
             # sample item latent D-vector
             for i in range(M):
-                mu_i, Lambda_i_inv = update_mu_vi(R, M, _U, Lambda_v, mu_v, alpha, i)
+                mu_i, Lambda_i_inv = update_mu_vi(R, Mask, _U, Lambda_v, mu_v, alpha, i)
                 _V[:, i] = sample_vi(mu_i, Lambda_i_inv)
 
         ## prediction step
         pred_t = predict(_U, _V, user_ids, item_ids, mean_rating)
+        assert np.any(pred_t != pred)
         pred_t = np.clip(pred, a_min=rate_min, a_max=rate_max)
         # compute Gibbs sampling approximation over <1..t> iterations
         pred = (pred * t + pred_t) / (t + 1)
 
-        rmses[t] = compute_RMSE(test, pred)
-        print(f"\trmse={rmses[t]}")
+        rmses[t] = compute_RMSE(validate, pred)
+        print(
+            f"\telapsed={round(time.perf_counter() - ts, 3)}s\trmse(validate)={rmses[t]}"
+        )
 
-    return pred, rmses[-1]
+    return pred, rmses

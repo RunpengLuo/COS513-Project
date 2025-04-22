@@ -15,7 +15,7 @@ def init_UV_rand(N: int, M: int, D: int):
 
 
 # TODO
-def init_UV_MAP(
+def init_UV_MAP_old(
     train_df: pd.DataFrame,
     R: np.ndarray,
     Mask: np.ndarray,
@@ -57,6 +57,61 @@ def init_UV_MAP(
         pass
 
     return
+
+def init_UV_MAP(
+    train_df: pd.DataFrame,
+    R: np.ndarray,
+    Mask: np.ndarray,
+    mean_rating: float,
+    D: int,
+    epsilon: float,
+    lambda_u: float,
+    lambda_v: float,
+    momentum: float,
+    num_epoch: int,
+):
+    """
+    find MAP estimate via SGD
+    """
+    print("Initializing U and V using MAP estimate via SGD...")
+    (N, M) = R.shape
+    U, V = init_UV_rand(N, M, D)
+    U_inc = np.zeros_like(U)
+    V_inc = np.zeros_like(V)
+
+    idx = train_df[["uidx", "bidx"]].to_numpy()
+    rating = (train_df["rating"] - mean_rating).to_numpy()
+
+    for epoch in range(num_epoch):
+        pred = np.array([np.dot(U[:, i], V[:, j]) for [i, j] in idx])
+        err = pred - rating
+
+        loss = 0.5 * np.sum(err ** 2)
+        loss += 0.5 * lambda_u * np.sum(U ** 2)
+        loss += 0.5 * lambda_v * np.sum(V ** 2)
+        print(f"Epoch {epoch + 1}/{num_epoch}, Loss: {loss:.4f}")
+
+        # gradients
+        dU = np.zeros_like(U)
+        dV = np.zeros_like(V)
+        for n in range(len(idx)):
+            i, j = idx[n]
+            eij = err[n]
+            dU[:, i] += eij * V[:, j]
+            dV[:, j] += eij * U[:, i]
+
+        # regularization
+        dU += lambda_u * U
+        dV += lambda_v * V
+
+        # momentum-based SGD update
+        U_inc = momentum * U_inc - epsilon * dU
+        V_inc = momentum * V_inc - epsilon * dV
+        U += U_inc
+        V += V_inc
+
+    return U, V
+
 
 
 def init_UV_ALS(
@@ -130,6 +185,7 @@ def bayesian_PMF(
     rate_max=1,
     seed=None,
     v=1,
+    init_method="MAP"
 ):
     """
     R: rating matrix with dimension N*M
@@ -152,9 +208,20 @@ def bayesian_PMF(
     print(f"Mean rating: {mean_rating}")
     R = R - mean_rating
 
+    if init_method == "ALS":
+        _U, _V = init_UV_ALS(train_df, R, Mask, mean_rating, D, epsilon=0.05, num_epoch=10)
+    elif init_method == "MAP":
+        _U, _V = init_UV_MAP(
+            train_df, R, Mask, mean_rating, D,
+            epsilon=0.005, lambda_u=0.002, lambda_v=0.002,
+            momentum=0.9, num_epoch=50
+        )
+    else:
+        raise ValueError(f"Unsupported init_method: {init_method}")
+
     # _U, _V = init_UV_sgd(train_df, R, Mask, mean_rating, D, 50, 0.01, 0.01, 0.8, 50)
     # _U, _V = init_UV_rand(N, M, D)
-    _U, _V = init_UV_ALS(train_df, R, Mask, mean_rating, D, 0.05, 10)
+    # _U, _V = init_UV_ALS(train_df, R, Mask, mean_rating, D, 0.05, 10)
 
     rmses = np.zeros(T + 1, dtype=np.float128)
     # prediction

@@ -45,3 +45,12 @@ def sample_Normal_Wishart(nu0, mu0, W0, beta0, seed=None):
     cov_mat = np.linalg.inv(beta0 * Lambda)
     mu = np.random.multivariate_normal(mean=mu0, cov=cov_mat)
     return mu, cov_mat, Lambda
+
+def update_hyperparameters(mu_u, sigma_u, mu_v, sigma_v, alpha_0, beta_0):
+    D, N = mu_u.shape
+    _, M = mu_v.shape
+    alpha_u = np.full(D, alpha_0 + 0.5 * N)
+    beta_u = np.full(D, beta_0 + 0.5 * (mu_u**2 + sigma_u).sum(axis=1))
+    alpha_v = np.full(D, alpha_0 + 0.5 * M)
+    beta_v = np.full(D, beta_0 + 0.5 * (mu_v**2 + sigma_v).sum(axis=1))
+    return alpha_u, beta_u, alpha_v, beta_v

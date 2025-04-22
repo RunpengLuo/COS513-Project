@@ -7,6 +7,7 @@ import pandas as pd
 
 from preprocessing import leave_k_out
 from bayesian_pmf import bayesian_PMF
+from bayesian_pmf_VI import bayesian_PMF_VI
 from evaluation import plot_rmse
 
 if __name__ == "__main__":
@@ -60,25 +61,42 @@ if __name__ == "__main__":
     alpha = 2
     beta0 = 2
 
-    pred, rmses = bayesian_PMF(
+    # pred, rmses = bayesian_PMF(
+    #     train_df,
+    #     mat_train,
+    #     mask_train,
+    #     valid,
+    #     valid_uidx,
+    #     valid_bidx,
+    #     D,
+    #     T,
+    #     G,
+    #     mu0,
+    #     nu0,
+    #     W0,
+    #     beta0,
+    #     alpha,
+    #     rate_min=0,
+    #     rate_max=1,
+    #     seed=42,
+    #     v=1,
+    # )
+
+    pred_ratings, rmses = bayesian_PMF_VI(
         train_df,
         mat_train,
         mask_train,
         valid,
         valid_uidx,
         valid_bidx,
-        D,
-        T,
-        G,
-        mu0,
-        nu0,
-        W0,
-        beta0,
-        alpha,
+        D,  # Latent dimension
+        T,  # Total iterations
+        alpha=1.0,  # Gaussian precision
+        alpha_0=1.0,
+        beta_0=1.0,
         rate_min=0,
         rate_max=1,
-        seed=42,
-        v=1,
+        seed=42
     )
 
     out_rmse = os.path.join(outdir, "rmse.png")

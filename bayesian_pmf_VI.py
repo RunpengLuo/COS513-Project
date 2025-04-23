@@ -23,7 +23,7 @@ def bayesian_PMF_VI(
     D: int,
     T: int,
     alpha: float,
-    alpha_0=1.0,
+    alpha_0=2.0, #1.0
     beta_0=1.0,
     rate_min=0,
     rate_max=1,
@@ -38,6 +38,9 @@ def bayesian_PMF_VI(
 
     if init_method == "ALS":
         U, V = init_UV_ALS(train_df, R, Mask, mean_rating, D, epsilon=0.05, num_epoch=10)
+        U = U / np.sqrt(D)
+        V = V / np.sqrt(D)
+
     elif init_method == "MAP":
         U, V = init_UV_MAP(
             train_df, R, Mask, mean_rating, D,
@@ -62,8 +65,11 @@ def bayesian_PMF_VI(
 
     mu_u = U.copy()
     mu_v = V.copy()
-    sigma_u = 0.1 * np.ones((D, N))
-    sigma_v = 0.1 * np.ones((D, M))
+
+    sigma_u = 1.0 * np.ones((D, N))  # Align with prior variance
+    sigma_v = 1.0 * np.ones((D, M))
+    # sigma_u = 0.1 * np.ones((D, N))
+    # sigma_v = 0.1 * np.ones((D, M))
 
     # Initialize variational hyperparameters for lambda_u and lambda_v (Gamma distributions)
     alpha_u, beta_u, alpha_v, beta_v = update_hyperparameters(

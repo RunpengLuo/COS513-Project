@@ -78,6 +78,7 @@ if __name__ == "__main__":
     }   
     
     ### comparing MAP vs ALS
+    #init_methods = ["ALS"]
     init_methods = ["MAP", "ALS"]
     results = {}
 

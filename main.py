@@ -60,11 +60,12 @@ if __name__ == "__main__":
     test_bidx = test_df["business_cid"].map(item2index).to_numpy()
     test_ratings = test_df["rating"].to_numpy()
 
-    D = 5 # latent dimension
-    T = 10 # num.epochs
-    # D = 32 # latent dimension
+    # D = 5 # latent dimension
+    T = 50 # num.epochs
+    D = 32 # latent dimension
     # D = 5
     # T = 3
+    # T = 10
     nu0 = D
     mu0 = 0
     W0 = np.eye(N=D, M=D, dtype=np.float32)
